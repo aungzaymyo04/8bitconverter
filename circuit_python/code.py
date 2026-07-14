@@ -118,7 +118,7 @@ while True:
                 print("System STARTED")
                 last_click_time = now
             else:
-                if (now - last_click_time) < 0.5:
+                if (now - last_click_time) < 0.6:
                     running = False
                     clear_all_outputs()
                     print("System STOPPED (Double-click)")
