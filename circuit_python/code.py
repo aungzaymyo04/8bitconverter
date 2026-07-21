@@ -4,7 +4,7 @@ import digitalio
 import time
 import json
 import adafruit_ssd1306
-
+import keypad  
 
 trg_pin = digitalio.DigitalInOut(board.GP8)
 trg_pin.direction = digitalio.Direction.OUTPUT
@@ -15,9 +15,7 @@ for i in range(8):
     pin.direction = digitalio.Direction.OUTPUT
     do_pins.append(pin)
 
-button = digitalio.DigitalInOut(board.GP16)
-button.direction = digitalio.Direction.INPUT
-button.pull = digitalio.Pull.UP
+button_keys = keypad.Keys((board.GP16,), value_when_pressed=False, pull=True)
 
 MASK_RELEASE_AFTER_SEC = 200
 TRIG_TIMER_SEC = 1
@@ -95,39 +93,35 @@ if not json_success:
 running = False
 start_time = 0.0
 next_trig_deadline = 0.0
-last_button_state = True
 last_click_time = 0.0
+
+DOUBLE_CLICK_TIMEOUT = 1.2
 
 clear_all_outputs()
 print("System Ready. 1-click to Start / Double-click to Stop.")
 update_display("READY", 0, 0.0)
 
 while True:
-    current_button_state = button.value
     now = time.monotonic()
-    
-    if last_button_state and not current_button_state:
-        time.sleep(0.02) 
-        if not button.value:
-            if not running:
-                running = True
-                COUNT = 0
-                start_time = time.monotonic()
-                next_trig_deadline = start_time + TRIG_TIMER_SEC
+    event = button_keys.events.get()
+    if event and event.pressed: 
+        if not running:
+            running = True
+            COUNT = 0
+            start_time = now
+            next_trig_deadline = start_time + TRIG_TIMER_SEC
+            clear_all_outputs()
+            print("System STARTED")
+            last_click_time = now
+        else:
+            if (now - last_click_time) < DOUBLE_CLICK_TIMEOUT:
+                running = False
                 clear_all_outputs()
-                print("System STARTED")
-                last_click_time = now
+                print("System STOPPED (Double-click)")
+                update_display("STOPPED", COUNT, now - start_time)
             else:
-                if (now - last_click_time) < 0.6:
-                    running = False
-                    clear_all_outputs()
-                    print("System STOPPED (Double-click)")
-                    update_display("STOPPED", COUNT, now - start_time)
-                else:
-                    print("Click detected (Waiting for second click to stop...)")
-                    last_click_time = now
-
-    last_button_state = current_button_state
+                print("Click detected (Waiting for second click to stop...)")
+                last_click_time = now
 
     if running:
         if now >= next_trig_deadline:
@@ -136,6 +130,7 @@ while True:
             
             print(f"Count: {current_count}, Elapsed: {elapsed_total_sec:.2f} s")
             
+            trg_pin.value = False
             trig(elapsed_total_sec, current_count)
             update_display("RUNNING", current_count, elapsed_total_sec)
             
